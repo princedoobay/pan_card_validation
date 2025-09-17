@@ -1,0 +1,125 @@
+--- PAN Number Validation Project using MYSQL ---
+
+create table pan_numbers_dataset
+( pan_numbers VARCHAR (20)
+);
+
+select count(*) from pan_numbers_dataset;
+
+-- 1. Identify and handle missing data
+select count(*)
+from pan_numbers_dataset
+where pan_numbers is null;
+
+-- 2. Check for duplicates
+select count(distinct(pan_numbers))
+from pan_numbers_dataset;
+
+select pan_numbers, count(*)
+from pan_numbers_dataset
+where pan_numbers is not null
+group by pan_numbers
+having count(*) > 1;
+ 
+-- 3. Handle leading/trailing spaces
+select *
+from pan_numbers_dataset
+where pan_numbers <> trim(pan_numbers);
+
+-- 4. Correct letter case
+select *
+from pan_numbers_dataset
+where pan_numbers <> upper(pan_numbers);
+
+-- 5. New cleaned table
+create table if not exists pan_numbers_dataset_cleaned as
+select distinct upper(trim(pan_numbers)) as PAN_number
+from pan_numbers_dataset
+where pan_numbers is not null and trim(pan_numbers) <> '';
+
+select * from pan_numbers_dataset_cleaned;
+
+-- 6. Function to check if adjacent characters are repetative. Returns true if adjacent characters are adjacent else returns false
+DROP FUNCTION IF EXISTS fn_check_adjacent_repetition;
+DELIMITER $$
+CREATE FUNCTION fn_check_adjacent_repetition(p_str TEXT)
+RETURNS VARCHAR(5)
+DETERMINISTIC
+BEGIN
+    DECLARE i INT DEFAULT 1;
+    DECLARE str_len INT;
+    
+    SET str_len = LENGTH(p_str);
+    
+    WHILE i < str_len DO
+        IF SUBSTRING(p_str, i, 1) = SUBSTRING(p_str, i + 1, 1) THEN
+            RETURN 'true';
+        END IF;
+        SET i = i + 1;
+    END WHILE;
+    RETURN 'false';
+END$$
+DELIMITER ;
+
+select fn_check_adjacent_repetition('helllo');
+
+-- 7. Function to check if characters are sequencial such as ABCDE, LMNOP, XYZ etc. Returns true if characters are sequencial else returns false
+DELIMITER $$
+CREATE FUNCTION fn_check_sequence(p_str TEXT)
+RETURNS VARCHAR(5)
+DETERMINISTIC
+BEGIN
+    DECLARE i INT DEFAULT 1;
+    DECLARE str_len INT;
+    
+    SET str_len = LENGTH(p_str);
+    
+    WHILE i < str_len DO
+        IF ASCII(SUBSTRING(p_str, i+1, 1)) - ASCII(SUBSTRING(p_str, i, 1)) <> 1 THEN
+            RETURN 'false';
+        END IF;
+        SET i = i + 1;
+    END WHILE;
+    RETURN 'true';
+END$$
+DELIMITER ;
+
+select fn_check_sequence('acp');
+
+-- 8. Valid Invalid PAN categorization
+create or replace view vw_valid_invalid_pan as
+with cte_clean_pan as
+		(select distinct upper(trim(pan_numbers)) as PAN_number
+		from pan_numbers_dataset
+		where pan_numbers is not null and trim(pan_numbers) <> ''),
+		
+    cte_valid_pan as (select * 
+		from cte_clean_pan
+		where fn_check_adjacent_repetition(PAN_number) = 'false'
+		and fn_check_sequence(substring(PAN_number, 1, 5)) = 'false'
+		and fn_check_sequence(substring(PAN_number, 6, 4)) = 'false'
+		and PAN_number regexp '^[A-Z]{5}[0-9]{4}[A-Z]$')
+
+select cln.PAN_number,
+	case when vld.PAN_number is null then 'InValid PAN' else 'Valid PAN' end as status
+from cte_clean_pan cln
+left join cte_valid_pan vld on cln.pan_number = vld.PAN_number
+
+
+-- 9. Summary report
+
+WITH cte AS (
+    SELECT
+        (SELECT COUNT(*) FROM pan_numbers_dataset) AS total_processed_records,
+        SUM(CASE WHEN vw.status = 'Valid PAN' THEN 1 ELSE 0 END) AS total_valid_pans,
+        SUM(CASE WHEN vw.status = 'Invalid PAN' THEN 1 ELSE 0 END) AS total_invalid_pans
+    FROM vw_valid_invalid_pan vw
+)
+SELECT
+    total_processed_records,
+    total_valid_pans,
+    total_invalid_pans,
+    total_processed_records - (total_valid_pans + total_invalid_pans) AS missing_incomplete_PANS
+FROM cte;
+
+  
