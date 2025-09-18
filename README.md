@@ -79,7 +79,7 @@ The repository contains a MySQL script that:
 
 1. Clone this repository:  
    ```bash
-   git clone <your-repo-link>
+   git clone https://github.com/princedoobay/pan_card_validation
    ```
 2. Import and run the script in your MySQL environment (e.g., MySQL Workbench).
 3. Load your PAN data into `pan_numbers_dataset`.
@@ -129,7 +129,6 @@ The repository contains a MySQL script that:
 
 ## 🖼️ Sample Output Screenshots  
 
-> Add screenshots of your Workbench or CLI output here:
 
 - Cleaned PAN table  
   ![Cleaned PAN Table](images/cleaned_pan_table.png)
